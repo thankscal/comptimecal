@@ -40,7 +40,7 @@
     border-radius:14px;padding:16px;box-shadow:0 1px 3px rgba(0,0,0,.06);
     margin-bottom:16px;
   }
-  .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+  .card-head{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px;flex-wrap:wrap}
   h2{font-size:14px;margin:0;letter-spacing:.5px;color:var(--muted);font-weight:600}
   .btns{display:flex;gap:8px}
   .btns.right{justify-content:flex-end;margin-top:10px}
@@ -64,14 +64,17 @@
 
   .hint{font-size:12px;color:var(--muted);margin:8px 0 0}
 
-  .filterbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+  .filterbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end}
   .field{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted)}
-  .field.grow{flex:1;min-width:170px}
-  select,input[type=date]{
+  .field.grow{flex:1;min-width:200px}
+  .field.tiny{width:96px}
+  select,input[type=date],input[type=number]{
     font:inherit;font-size:13px;padding:7px 9px;border-radius:8px;
     border:1px solid var(--border);background:var(--card);color:var(--text);
   }
-  select{width:100%}
+  select,input[type=number]{width:100%}
+  input:disabled{opacity:.45;cursor:not-allowed}
+  select:focus,input:focus{outline:2px solid var(--accent);outline-offset:-1px}
 
   .total-box{
     background:var(--accent-soft);border-radius:12px;padding:16px;
@@ -93,6 +96,7 @@
   .hidden{display:none}
 
   .muted{color:var(--muted);font-size:12px}
+  .warncount{color:var(--bad);font-weight:700}
 
   .table-scroll{max-height:440px;overflow:auto;border:1px solid var(--border);border-radius:10px}
   table{border-collapse:collapse;width:100%;font-size:13px}
@@ -105,12 +109,23 @@
   td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
   tfoot td{font-weight:700;background:var(--accent-soft);border-bottom:none}
   .status{font-size:12px}
+
+  /* 到期警示 */
+  td.warn{background:var(--bad-soft);color:var(--bad);font-weight:700}
+  .badge{
+    display:inline-block;margin-left:6px;padding:1px 7px;border-radius:6px;
+    font-size:11px;font-weight:700;vertical-align:middle;line-height:1.5;
+  }
+  .badge.soon,.badge.overdue{background:var(--bad);color:#fff}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>國內補休差假結餘 計算器</h1>
-  <p class="sub">貼上清單即自動加總 · 換算規則：8 時 = 1 日、60 分 = 1 時</p>
+  <p class="sub">
+    貼上清單即自動加總 · 換算規則：8 時 = 1 日、60 分 = 1 時
+    · 警示基準日：<strong id="todayLabel">—</strong>
+  </p>
 
   <div class="grid">
     <!-- 輸入 -->
@@ -136,14 +151,11 @@
           <select id="filterType">
             <option value="none">全部加總</option>
             <option value="validOn">指定日當天仍有效（生效 ≤ X ≤ 到期）</option>
-            <option value="expireGE">到期日 ≥ 指定日</option>
-            <option value="expireLE">到期日 ≤ 指定日</option>
-            <option value="startLE">生效日 ≤ 指定日</option>
           </select>
         </div>
         <div class="field">
           <label for="filterDate">指定日</label>
-          <input type="date" id="filterDate">
+          <input type="date" id="filterDate" disabled>
         </div>
       </div>
 
@@ -165,6 +177,10 @@
   <section class="card hidden" id="detailCard">
     <div class="card-head">
       <h2>③ 明細</h2>
+      <div class="field tiny">
+        <label for="warnDays">警示天數</label>
+        <input type="number" id="warnDays" min="0" max="365" step="1" value="45">
+      </div>
       <span class="muted" id="detailInfo"></span>
     </div>
     <div class="table-scroll">
@@ -178,10 +194,12 @@
   "use strict";
 
   var DAY_MIN = 8 * 60;  // 1 日 = 480 分
+  var MS_DAY  = 86400000;
 
   var inputEl      = document.getElementById('input');
   var filterTypeEl = document.getElementById('filterType');
   var filterDateEl = document.getElementById('filterDate');
+  var warnDaysEl   = document.getElementById('warnDays');
   var totalLabelEl = document.getElementById('totalLabel');
   var totalValueEl = document.getElementById('totalValue');
   var totalSubEl   = document.getElementById('totalSub');
@@ -189,7 +207,13 @@
   var detailCard   = document.getElementById('detailCard');
   var detailTable  = document.getElementById('detailTable');
   var detailInfo   = document.getElementById('detailInfo');
+  var todayLabelEl = document.getElementById('todayLabel');
   var copyBtn      = document.getElementById('copyBtn');
+
+  /* ---------- 今天（歸零到 00:00） ---------- */
+  var TODAY = new Date();
+  TODAY.setHours(0, 0, 0, 0);
+  todayLabelEl.textContent = fmtDate(TODAY);
 
   /* ---------- 格式化 ---------- */
   function fmtFull(min){
@@ -205,9 +229,16 @@
     if (!dt) return '—';
     return dt.getFullYear() + '/' + pad(dt.getMonth() + 1) + '/' + pad(dt.getDate());
   }
+  function addDays(dt, n){
+    var d = new Date(dt.getTime());
+    d.setDate(d.getDate() + n);
+    return d;
+  }
+  function daysBetween(a, b){ // b - a，以整天計
+    return Math.round((b.getTime() - a.getTime()) / MS_DAY);
+  }
 
   /* ---------- 解析 ---------- */
-  // 支援 2026/05/08、2026-05-08、2026.5.8、2026年05月08日
   function dateRe(){ return /\d{4}\s*[\/\-\.年]\s*\d{1,2}\s*[\/\-\.月]\s*\d{1,2}\s*日?/g; }
 
   function toDate(s){
@@ -234,7 +265,7 @@
       var dates = line.match(dateRe());
       if (!dates || dates.length < 2) continue;
 
-      // 先把日期拿掉，避免「2026年05月08日」的「日」被誤判為天數
+      // 先移除日期，避免「2026年05月08日」的「日」被誤判為天數
       var stripped = line.replace(dateRe(), ' ');
 
       var d  = unit(stripped, /(\d+)\s*[日天]/);
@@ -259,7 +290,7 @@
     return rows;
   }
 
-  // 從「餘假資訊」區塊找出官方顯示的總計，用來比對
+  // 從「餘假資訊」區塊抓官方總計，用來比對
   function findDeclared(text){
     var i = text.indexOf('餘假資訊');
     if (i < 0) return null;
@@ -276,25 +307,19 @@
     return new Date(+p[0], +p[1] - 1, +p[2]);
   }
 
-  /* ---------- 篩選 ---------- */
+  /* ---------- 篩選（只剩「指定日當天仍有效」） ---------- */
   function matches(r, type, d){
-    if (type === 'none' || !d) return true;
-    if (type === 'expireGE') return r.expire >= d;
-    if (type === 'expireLE') return r.expire <= d;
-    if (type === 'startLE')  return r.start  <= d;
-    if (type === 'validOn')  return r.start <= d && r.expire >= d;
-    return true;
+    if (type !== 'validOn' || !d) return true;
+    return r.start <= d && r.expire >= d;
   }
 
   function labelFor(type, d){
-    var ds = d ? fmtDate(d) : '';
-    switch (type){
-      case 'validOn':  return ds ? ds + ' 當天仍有效' : '總計（全部）';
-      case 'expireGE': return ds ? '到期日 ≥ ' + ds : '總計（全部）';
-      case 'expireLE': return ds ? '到期日 ≤ ' + ds : '總計（全部）';
-      case 'startLE':  return ds ? '生效日 ≤ ' + ds : '總計（全部）';
-      default:         return '總計（全部）';
-    }
+    if (type === 'validOn' && d) return fmtDate(d) + ' 當天仍有效';
+    return '總計（全部）';
+  }
+
+  function updateDateState(){
+    filterDateEl.disabled = (filterTypeEl.value !== 'validOn');
   }
 
   /* ---------- 主流程 ---------- */
@@ -303,10 +328,19 @@
     var type = filterTypeEl.value;
     var fd   = parseDateInput(filterDateEl.value);
 
-    var total = 0, inc = 0;
+    var warnDays = parseInt(warnDaysEl.value, 10);
+    if (isNaN(warnDays) || warnDays < 0) warnDays = 45;
+    var warnUntil = addDays(TODAY, warnDays);
+
+    var total = 0, inc = 0, warnCount = 0;
+
     for (var i = 0; i < rows.length; i++){
       rows[i].included = matches(rows[i], type, fd);
       if (rows[i].included){ total += rows[i].minutes; inc++; }
+
+      rows[i].daysLeft = daysBetween(TODAY, rows[i].expire);
+      rows[i].isWarn   = rows[i].expire <= warnUntil;
+      if (rows[i].isWarn) warnCount++;
     }
 
     totalLabelEl.textContent = labelFor(type, fd);
@@ -321,7 +355,7 @@
         (total / 60).toFixed(2) + ' 小時（' + total + ' 分）';
     }
 
-    /* 與「餘假資訊」比對 */
+    /* 與「餘假資訊」比對（僅全部加總時） */
     var declared = findDeclared(inputEl.value);
     if (declared !== null && type === 'none' && rows.length > 0){
       var diff = total - declared;
@@ -345,7 +379,10 @@
       return;
     }
     detailCard.classList.remove('hidden');
-    detailInfo.textContent = '共 ' + rows.length + ' 筆，依到期日排序';
+
+    detailInfo.innerHTML = '共 ' + rows.length + ' 筆，依到期日排序 · ' +
+      '警示 <span class="warncount">' + warnCount + '</span> 筆' +
+      '（' + fmtDate(TODAY) + ' 起 ' + warnDays + ' 天內到期）';
 
     var sorted = rows.slice().sort(function(a, b){
       return (a.expire - b.expire) || (a.start - b.start);
@@ -362,11 +399,20 @@
 
     for (var j = 0; j < sorted.length; j++){
       var r = sorted[j];
+
+      var badge = '';
+      if (r.daysLeft < 0){
+        badge = '<span class="badge overdue">已到期</span>';
+      } else if (r.isWarn){
+        badge = '<span class="badge soon">剩 ' + r.daysLeft + ' 天</span>';
+      }
+
       html += '<tr class="' + (r.included ? '' : 'off') + '">' +
         '<td class="num">' + (j + 1) + '</td>' +
         '<td>' + fmtFull(r.minutes) + '</td>' +
         '<td>' + fmtDate(r.start) + '</td>' +
-        '<td>' + fmtDate(r.expire) + '</td>' +
+        '<td class="' + (r.isWarn ? 'warn' : '') + '">' +
+          fmtDate(r.expire) + badge + '</td>' +
         '<td class="num">' + r.minutes + '</td>' +
         '<td class="status">' + (r.included ? '✓ 計入' : '— 排除') + '</td>' +
         '</tr>';
@@ -389,9 +435,10 @@
   }
 
   inputEl.addEventListener('input', schedule);
-  filterTypeEl.addEventListener('change', render);
+  filterTypeEl.addEventListener('change', function(){ updateDateState(); render(); });
   filterDateEl.addEventListener('change', render);
   filterDateEl.addEventListener('input', render);
+  warnDaysEl.addEventListener('input', render);
 
   copyBtn.addEventListener('click', function(){
     var txt = totalValueEl.textContent;
@@ -502,11 +549,8 @@
   });
 
   /* ---------- 初始化 ---------- */
-  (function initDate(){
-    var t = new Date();
-    filterDateEl.value = t.getFullYear() + '-' + pad(t.getMonth() + 1) + '-' + pad(t.getDate());
-  })();
-
+  filterDateEl.value = TODAY.getFullYear() + '-' + pad(TODAY.getMonth() + 1) + '-' + pad(TODAY.getDate());
+  updateDateState();
   render();
 })();
 </script>

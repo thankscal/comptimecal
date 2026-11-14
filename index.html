@@ -45,6 +45,11 @@
   .btns{display:flex;gap:8px}
   .btns.right{justify-content:flex-end;margin-top:10px}
 
+  /* 使用說明 */
+  .guide-list{margin:0;padding-left:20px;font-size:13.5px;line-height:1.9}
+  .guide-list li{margin:2px 0}
+  .guide-list b{color:var(--accent)}
+
   button{
     font:inherit;font-size:13px;cursor:pointer;border-radius:8px;
     border:1px solid var(--border);background:var(--card);color:var(--text);
@@ -64,18 +69,7 @@
 
   .hint{font-size:12px;color:var(--muted);margin:8px 0 0}
 
-  .filterbar{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:14px;align-items:flex-end}
-  .field{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted)}
-  .field.grow{flex:1;min-width:200px}
-  .field.tiny{width:96px}
-  select,input[type=date],input[type=number]{
-    font:inherit;font-size:13px;padding:7px 9px;border-radius:8px;
-    border:1px solid var(--border);background:var(--card);color:var(--text);
-  }
-  select,input[type=number]{width:100%}
-  input:disabled{opacity:.45;cursor:not-allowed}
-  select:focus,input:focus{outline:2px solid var(--accent);outline-offset:-1px}
-
+  /* 全部加總 */
   .total-box{
     background:var(--accent-soft);border-radius:12px;padding:16px;
     border:1px solid var(--border);
@@ -86,6 +80,28 @@
     word-break:break-word;line-height:1.25;
   }
   .total-sub{font-size:12.5px;color:var(--muted);margin-top:6px}
+
+  /* 指定日當天仍有效 */
+  .valid-box{
+    margin-top:12px;padding:14px 16px;border-radius:12px;
+    border:1px dashed var(--border);background:var(--card);
+  }
+  .valid-head{
+    display:flex;align-items:center;justify-content:space-between;
+    gap:10px;flex-wrap:wrap;margin-bottom:8px;
+  }
+  .valid-title{font-size:12.5px;color:var(--muted);font-weight:600}
+  input[type=date]{
+    font:inherit;font-size:13px;padding:6px 9px;border-radius:8px;
+    border:1px solid var(--border);background:var(--input);color:var(--text);
+  }
+  input[type=date]:focus{outline:2px solid var(--accent);outline-offset:-1px}
+  .valid-value{
+    font-size:22px;font-weight:800;color:var(--ok);
+    word-break:break-word;line-height:1.3;
+  }
+  .valid-value.empty{color:var(--muted);font-weight:600;font-size:18px}
+  .valid-sub{font-size:12px;color:var(--muted);margin-top:4px}
 
   .declared{
     margin-top:12px;padding:10px 12px;border-radius:10px;font-size:13px;
@@ -117,15 +133,34 @@
     font-size:11px;font-weight:700;vertical-align:middle;line-height:1.5;
   }
   .badge.soon,.badge.overdue{background:var(--bad);color:#fff}
+
+  /* 警示天數 */
+  .field{display:flex;flex-direction:column;gap:4px;font-size:11.5px;color:var(--muted)}
+  .field.tiny{width:96px}
+  input[type=number]{
+    font:inherit;font-size:13px;padding:7px 9px;border-radius:8px;
+    border:1px solid var(--border);background:var(--card);color:var(--text);width:100%;
+  }
+  input[type=number]:focus{outline:2px solid var(--accent);outline-offset:-1px}
 </style>
 </head>
 <body>
 <div class="wrap">
   <h1>國內補休差假結餘 計算器</h1>
   <p class="sub">
-    貼上清單即自動加總 · 換算規則：8 時 = 1 日、60 分 = 1 時
+    換算規則：8 時 = 1 日、60 分 = 1 時
     · 警示基準日：<strong id="todayLabel">—</strong>
   </p>
+
+  <!-- 使用說明 -->
+  <section class="card">
+    <div class="card-head"><h2>使用說明</h2></div>
+    <ol class="guide-list">
+      <li>先到 <b>國內（含外派）員工差勤系統</b>，點選「查詢餘假明細」。</li>
+      <li>把 <b>⌾國內補休</b> 一路複製到最後一筆的「到期日」。</li>
+      <li>貼到下方 <b>① 貼上資料</b> 框框內，就會自動產生資料。</li>
+    </ol>
+  </section>
 
   <div class="grid">
     <!-- 輸入 -->
@@ -145,30 +180,27 @@
     <section class="card">
       <div class="card-head"><h2>② 計算結果</h2></div>
 
-      <div class="filterbar">
-        <div class="field grow">
-          <label for="filterType">篩選條件</label>
-          <select id="filterType">
-            <option value="none">全部加總</option>
-            <option value="validOn">指定日當天仍有效（生效 ≤ X ≤ 到期）</option>
-          </select>
-        </div>
-        <div class="field">
-          <label for="filterDate">指定日</label>
-          <input type="date" id="filterDate" disabled>
-        </div>
+      <!-- 全部加總 -->
+      <div class="total-box">
+        <div class="total-label">全部加總</div>
+        <div class="total-value" id="totalAllValue">—</div>
+        <div class="total-sub" id="totalAllSub">尚未偵測到資料</div>
       </div>
 
-      <div class="total-box">
-        <div class="total-label" id="totalLabel">總計</div>
-        <div class="total-value" id="totalValue">—</div>
-        <div class="total-sub" id="totalSub">尚未偵測到資料</div>
+      <!-- 指定日當天仍有效 -->
+      <div class="valid-box">
+        <div class="valid-head">
+          <span class="valid-title">指定日當天仍有效</span>
+          <input type="date" id="filterDate">
+        </div>
+        <div class="valid-value empty" id="validValue">—</div>
+        <div class="valid-sub" id="validSub">請先貼上資料</div>
       </div>
 
       <div class="declared hidden" id="declaredBox"></div>
 
       <div class="btns right">
-        <button class="small" id="copyBtn">複製總計</button>
+        <button class="small" id="copyBtn">複製全部加總</button>
       </div>
     </section>
   </div>
@@ -196,19 +228,19 @@
   var DAY_MIN = 8 * 60;  // 1 日 = 480 分
   var MS_DAY  = 86400000;
 
-  var inputEl      = document.getElementById('input');
-  var filterTypeEl = document.getElementById('filterType');
-  var filterDateEl = document.getElementById('filterDate');
-  var warnDaysEl   = document.getElementById('warnDays');
-  var totalLabelEl = document.getElementById('totalLabel');
-  var totalValueEl = document.getElementById('totalValue');
-  var totalSubEl   = document.getElementById('totalSub');
-  var declaredBox  = document.getElementById('declaredBox');
-  var detailCard   = document.getElementById('detailCard');
-  var detailTable  = document.getElementById('detailTable');
-  var detailInfo   = document.getElementById('detailInfo');
-  var todayLabelEl = document.getElementById('todayLabel');
-  var copyBtn      = document.getElementById('copyBtn');
+  var inputEl         = document.getElementById('input');
+  var filterDateEl    = document.getElementById('filterDate');
+  var warnDaysEl      = document.getElementById('warnDays');
+  var totalAllValueEl = document.getElementById('totalAllValue');
+  var totalAllSubEl   = document.getElementById('totalAllSub');
+  var validValueEl    = document.getElementById('validValue');
+  var validSubEl      = document.getElementById('validSub');
+  var declaredBox     = document.getElementById('declaredBox');
+  var detailCard      = document.getElementById('detailCard');
+  var detailTable     = document.getElementById('detailTable');
+  var detailInfo      = document.getElementById('detailInfo');
+  var todayLabelEl    = document.getElementById('todayLabel');
+  var copyBtn         = document.getElementById('copyBtn');
 
   /* ---------- 今天（歸零到 00:00） ---------- */
   var TODAY = new Date();
@@ -307,58 +339,59 @@
     return new Date(+p[0], +p[1] - 1, +p[2]);
   }
 
-  /* ---------- 篩選（只剩「指定日當天仍有效」） ---------- */
-  function matches(r, type, d){
-    if (type !== 'validOn' || !d) return true;
-    return r.start <= d && r.expire >= d;
-  }
-
-  function labelFor(type, d){
-    if (type === 'validOn' && d) return fmtDate(d) + ' 當天仍有效';
-    return '總計（全部）';
-  }
-
-  function updateDateState(){
-    filterDateEl.disabled = (filterTypeEl.value !== 'validOn');
-  }
-
   /* ---------- 主流程 ---------- */
   function render(){
     var rows = parseRows(inputEl.value);
-    var type = filterTypeEl.value;
     var fd   = parseDateInput(filterDateEl.value);
 
     var warnDays = parseInt(warnDaysEl.value, 10);
     if (isNaN(warnDays) || warnDays < 0) warnDays = 45;
     var warnUntil = addDays(TODAY, warnDays);
 
-    var total = 0, inc = 0, warnCount = 0;
+    var totalAll = 0, totalValid = 0, incValid = 0, warnCount = 0;
 
     for (var i = 0; i < rows.length; i++){
-      rows[i].included = matches(rows[i], type, fd);
-      if (rows[i].included){ total += rows[i].minutes; inc++; }
+      var r = rows[i];
+      totalAll += r.minutes;
 
-      rows[i].daysLeft = daysBetween(TODAY, rows[i].expire);
-      rows[i].isWarn   = rows[i].expire <= warnUntil;
-      if (rows[i].isWarn) warnCount++;
+      r.validOn = fd ? (r.start <= fd && r.expire >= fd) : true;
+      if (r.validOn){ totalValid += r.minutes; incValid++; }
+
+      r.daysLeft = daysBetween(TODAY, r.expire);
+      r.isWarn   = r.expire <= warnUntil;
+      if (r.isWarn) warnCount++;
     }
 
-    totalLabelEl.textContent = labelFor(type, fd);
+    /* 全部加總 */
+    if (rows.length === 0){
+      totalAllValueEl.textContent = '—';
+      totalAllSubEl.textContent   = '尚未偵測到資料，請貼上清單。';
+    } else {
+      totalAllValueEl.textContent = fmtFull(totalAll);
+      totalAllSubEl.textContent =
+        '共 ' + rows.length + ' 筆 · 總時數 ' +
+        (totalAll / 60).toFixed(2) + ' 小時（' + totalAll + ' 分）';
+    }
+
+    /* 指定日當天仍有效 */
+    validValueEl.classList.toggle('empty', rows.length === 0 || !fd);
 
     if (rows.length === 0){
-      totalValueEl.textContent = '—';
-      totalSubEl.textContent = '尚未偵測到資料，請貼上清單。';
+      validValueEl.textContent = '—';
+      validSubEl.textContent   = '請先貼上資料';
+    } else if (!fd){
+      validValueEl.textContent = '—';
+      validSubEl.textContent   = '請選擇日期';
     } else {
-      totalValueEl.textContent = fmtFull(total);
-      totalSubEl.textContent =
-        '計入 ' + inc + ' / ' + rows.length + ' 筆 · 總時數 ' +
-        (total / 60).toFixed(2) + ' 小時（' + total + ' 分）';
+      validValueEl.textContent = fmtFull(totalValid);
+      validSubEl.textContent =
+        fmtDate(fd) + ' 當天仍有效 · 計入 ' + incValid + ' / ' + rows.length + ' 筆';
     }
 
     /* 與「餘假資訊」比對（僅全部加總時） */
     var declared = findDeclared(inputEl.value);
-    if (declared !== null && type === 'none' && rows.length > 0){
-      var diff = total - declared;
+    if (declared !== null && rows.length > 0){
+      var diff = totalAll - declared;
       declaredBox.classList.remove('hidden');
       if (diff === 0){
         declaredBox.className = 'declared ok';
@@ -394,35 +427,45 @@
       '<th>生效日</th>' +
       '<th>到期日</th>' +
       '<th class="num">分鐘</th>' +
-      '<th>狀態</th>' +
+      '<th>指定日</th>' +
       '</tr></thead><tbody>';
 
     for (var j = 0; j < sorted.length; j++){
-      var r = sorted[j];
+      var row = sorted[j];
 
       var badge = '';
-      if (r.daysLeft < 0){
+      if (row.daysLeft < 0){
         badge = '<span class="badge overdue">已到期</span>';
-      } else if (r.isWarn){
-        badge = '<span class="badge soon">剩 ' + r.daysLeft + ' 天</span>';
+      } else if (row.isWarn){
+        badge = '<span class="badge soon">剩 ' + row.daysLeft + ' 天</span>';
       }
 
-      html += '<tr class="' + (r.included ? '' : 'off') + '">' +
+      var statusTxt = fd
+        ? (row.validOn ? '✓ 當天有效' : '— 當天無效')
+        : '✓';
+
+      html += '<tr class="' + (row.validOn ? '' : 'off') + '">' +
         '<td class="num">' + (j + 1) + '</td>' +
-        '<td>' + fmtFull(r.minutes) + '</td>' +
-        '<td>' + fmtDate(r.start) + '</td>' +
-        '<td class="' + (r.isWarn ? 'warn' : '') + '">' +
-          fmtDate(r.expire) + badge + '</td>' +
-        '<td class="num">' + r.minutes + '</td>' +
-        '<td class="status">' + (r.included ? '✓ 計入' : '— 排除') + '</td>' +
+        '<td>' + fmtFull(row.minutes) + '</td>' +
+        '<td>' + fmtDate(row.start) + '</td>' +
+        '<td class="' + (row.isWarn ? 'warn' : '') + '">' +
+          fmtDate(row.expire) + badge + '</td>' +
+        '<td class="num">' + row.minutes + '</td>' +
+        '<td class="status">' + statusTxt + '</td>' +
         '</tr>';
     }
 
-    html += '</tbody><tfoot><tr>' +
-      '<td colspan="4">合計（計入 ' + inc + ' 筆）</td>' +
-      '<td class="num">' + total + '</td>' +
-      '<td>' + fmtFull(total) + '</td>' +
-      '</tr></tfoot>';
+    html += '</tbody><tfoot>';
+    html += '<tr><td colspan="4">全部合計（' + rows.length + ' 筆）</td>' +
+      '<td class="num">' + totalAll + '</td>' +
+      '<td>' + fmtFull(totalAll) + '</td></tr>';
+    if (fd){
+      html += '<tr><td colspan="4">' + fmtDate(fd) +
+        ' 當天仍有效合計（' + incValid + ' 筆）</td>' +
+        '<td class="num">' + totalValid + '</td>' +
+        '<td>' + fmtFull(totalValid) + '</td></tr>';
+    }
+    html += '</tfoot>';
 
     detailTable.innerHTML = html;
   }
@@ -435,13 +478,12 @@
   }
 
   inputEl.addEventListener('input', schedule);
-  filterTypeEl.addEventListener('change', function(){ updateDateState(); render(); });
   filterDateEl.addEventListener('change', render);
   filterDateEl.addEventListener('input', render);
   warnDaysEl.addEventListener('input', render);
 
   copyBtn.addEventListener('click', function(){
-    var txt = totalValueEl.textContent;
+    var txt = totalAllValueEl.textContent;
     if (!txt || txt === '—') return;
     var done = function(){
       var old = copyBtn.textContent;
@@ -550,7 +592,6 @@
 
   /* ---------- 初始化 ---------- */
   filterDateEl.value = TODAY.getFullYear() + '-' + pad(TODAY.getMonth() + 1) + '-' + pad(TODAY.getDate());
-  updateDateState();
   render();
 })();
 </script>
